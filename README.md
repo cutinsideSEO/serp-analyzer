@@ -1,1 +1,0 @@
-# SERP-Domain-Analyzer

@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SERP Visualization Tool</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- SheetJS (xlsx.js) for reading Excel files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- D3.js for charting -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Applying custom styles and theme */
+        body {
+            background-color: #0f0e0e;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+        }
+        .header-text {
+            color: #ffffff; /* Changed from orange to white */
+        }
+        .card, .table-container, .custom-select, input[type="text"] {
+            background-color: #1f2324;
+            border: 1px solid #4a5568;
+        }
+        .file-upload-btn {
+            background-color: #49b9b1; /* Changed background color */
+            color: #ffffff; /* Changed text color */
+            border: 1px solid #4a5568;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2324; }
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #718096; }
+        
+        /* Table styles */
+        th, td {
+            padding: 10px 15px; /* Reduced padding */
+            text-align: left;
+            border-bottom: 1px solid #3a3f40;
+            vertical-align: middle;
+        }
+        td.wrap-cell, th.wrap-cell {
+            white-space: normal;
+            word-break: break-word;
+        }
+        th {
+            background-color: #2c3132;
+            font-weight: 600;
+            color: #49b9b1; /* Changed to new color */
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+        th.sortable:hover {
+            background-color: #3a3f40;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        tr:nth-child(even) {
+            background-color: #25292a;
+        }
+        /* Hide file input but keep it functional */
+        input[type="file"] {
+            display: none;
+        }
+
+        /* --- Dual Range Slider Styles --- */
+        .dual-slider-container {
+            position: relative;
+            height: 20px;
+        }
+        .dual-slider-container input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            position: absolute;
+            width: 100%;
+            height: 8px;
+            background: transparent; /* Track is handled by custom divs */
+            pointer-events: none; /* Let clicks pass through */
+            margin: 0;
+            top: 6px; /* This centers the slider track vertically inside the container */
+        }
+        .dual-slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #ffffff; /* Changed from orange to white */
+            cursor: pointer;
+            border-radius: 50%;
+            pointer-events: auto; /* Make thumb clickable */
+        }
+        .dual-slider-container input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #ffffff; /* Changed from orange to white */
+            cursor: pointer;
+            border-radius: 50%;
+            pointer-events: auto; /* Make thumb clickable */
+        }
+        .slider-track-bg {
+            position: absolute;
+            width: 100%;
+            height: 8px;
+            background: #4a5568;
+            border-radius: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        #range-track-fill {
+            position: absolute;
+            height: 8px;
+            background: #ffffff; /* Changed from orange to white */
+            border-radius: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .domain-row {
+            cursor: pointer;
+        }
+        .url-details-row, .keyword-details-row {
+            background-color: #2a2e2f;
+        }
+        .sort-icon {
+            display: inline-block;
+            margin-left: 5px;
+            opacity: 0.5;
+        }
+        th.asc .sort-icon, th.desc .sort-icon {
+            opacity: 1;
+        }
+        /* Bubble Chart Tooltip */
+        #chart-tooltip {
+            position: absolute;
+            text-align: left;
+            padding: 8px;
+            font-size: 12px;
+            background: #2c3132;
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .type-label {
+            white-space: normal;
+            display: inline-block;
+            line-height: 1.25;
+        }
+        /* Website Type Colors */
+        .type-discussion-platforms { background-color: #FF9800; color: #ffffff; }
+        .type-social-networks { background-color: #3F51B5; color: #ffffff; }
+        .type-video-platforms { background-color: #FF0000; color: #ffffff; }
+        .type-publishers { background-color: #9C27B0; color: #ffffff; }
+        .type-brand-sites { background-color: #009688; color: #ffffff; }
+        .type-marketplaces { background-color: #4CAF50; color: #ffffff; }
+        .type-blogs { background-color: #E91E63; color: #ffffff; }
+        .type-review-sites { background-color: #607D8B; color: #ffffff; }
+        .type-aggregators { background-color: #00BCD4; color: #ffffff; }
+        .type-educational-platforms { background-color: #8BC34A; color: #ffffff; }
+        .type-government-public-services { background-color: #673AB7; color: #ffffff; }
+        .type-tools-saas { background-color: #2196F3; color: #ffffff; }
+        .type-default { background-color: #374151; color: #ffffff; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div id="app" class="container mx-auto p-4 md:p-8">
+        
+        <!-- Main Header -->
+        <div class="flex justify-between items-center mb-8 px-4">
+            <header class="text-left">
+                <h1 class="text-3xl md:text-4xl font-bold" style="color: #49b9b1;">SERP Domain Analyzer</h1>
+                <p class="text-gray-400 mt-2">Upload an Excel file to analyze search results</p>
+            </header>
+            <img src="https://cutinside.com/llm-perception-tool/logo.png" alt="Cutinside Logo" class="h-12" onerror="this.style.display='none'">
+        </div>
+
+        <!-- File Upload Section -->
+        <div id="upload-section" class="max-w-xl mx-auto text-center card p-8 rounded-lg shadow-lg">
+            <h2 class="text-2xl font-semibold mb-4" style="color: #49b9b1;">Get Started</h2>
+            <p class="text-gray-400 mb-6">Select an Excel file containing two sheets: "Keywords" and "SERP-Results".</p>
+            <label for="excel-file" class="file-upload-btn cursor-pointer inline-block font-bold py-3 px-6 rounded-lg shadow-md hover:bg-teal-500 transition-colors duration-200">
+                Select Excel File
+            </label>
+            <input type="file" id="excel-file" accept=".xlsx, .xls">
+            <p id="file-name" class="text-gray-500 mt-4 text-sm"></p>
+            <div id="loader" class="hidden mt-4">
+                <svg class="animate-spin h-8 w-8 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="mt-2 text-gray-400">Processing data...</p>
+            </div>
+             <p id="error-message" class="text-red-500 mt-4 hidden"></p>
+        </div>
+
+        <!-- Filters and Results Section (hidden by default) -->
+        <div id="data-section" class="hidden mt-8">
+            <!-- Filters -->
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6 card p-4 rounded-lg items-end">
+                <div>
+                    <label for="group-filter" class="block text-sm font-medium text-gray-300 mb-2" style="color: #49b9b1;">Filter by Group:</label>
+                    <select id="group-filter" class="custom-select block w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-white"></select>
+                </div>
+                <div>
+                    <label for="keyword-select" class="block text-sm font-medium text-gray-300 mb-2" style="color: #49b9b1;">Select Keyword:</label>
+                    <select id="keyword-select" class="custom-select block w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-white"></select>
+                </div>
+                 <div>
+                    <label for="keyword-text-filter" class="block text-sm font-medium text-gray-300 mb-2" style="color: #49b9b1;">Filter by Keyword:</label>
+                    <input type="text" id="keyword-text-filter" class="block w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-white" placeholder="Contains...">
+                </div>
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-300" style="color: #49b9b1;">Global Volume Range:</label>
+                    <div class="flex justify-between text-xs">
+                        <span>Min: <span id="volume-range-value-min" class="font-bold header-text"></span></span>
+                        <span>Max: <span id="volume-range-value-max" class="font-bold header-text"></span></span>
+                    </div>
+                    <div class="dual-slider-container">
+                        <div class="slider-track-bg"></div>
+                        <div id="range-track-fill"></div>
+                        <input type="range" id="volume-range-min">
+                        <input type="range" id="volume-range-max">
+                    </div>
+                </div>
+                <div>
+                    <label for="result-type-filter" class="block text-sm font-medium text-gray-300 mb-2" style="color: #49b9b1;">Result Type:</label>
+                    <div class="relative">
+                        <button id="result-type-filter-button" class="custom-select block w-full p-2.5 rounded-lg text-left truncate">All</button>
+                        <div id="result-type-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-[#1f2324] border border-[#4a5568] rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            <!-- Checkboxes will be inserted here by JS -->
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label for="website-type-filter" class="block text-sm font-medium text-gray-300 mb-2" style="color: #49b9b1;">Website Type:</label>
+                    <div class="relative">
+                        <button id="website-type-filter-button" class="custom-select block w-full p-2.5 rounded-lg text-left truncate">All</button>
+                        <div id="website-type-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-[#1f2324] border border-[#4a5568] rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            <!-- Checkboxes will be inserted here by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keyword Info -->
+            <div id="keyword-info" class="text-center mb-6 card p-6 rounded-lg hidden">
+                 <div class="flex justify-around items-center gap-4 flex-wrap">
+                    <div>
+                        <p class="text-gray-400 text-sm" style="color: #49b9b1;">Global Search Volume</p>
+                        <p id="volume-display" class="font-bold text-2xl header-text"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-400 text-sm" style="color: #49b9b1;">CPC</p>
+                        <p id="cpc-display" class="font-bold text-2xl header-text"></p>
+                    </div>
+                    <div class="max-w-xs">
+                        <p class="text-gray-400 text-sm" style="color: #49b9b1;">Intents</p>
+                        <p id="intents-display" class="font-bold text-sm text-white break-words"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-400 text-sm" style="color: #49b9b1;">Last Update</p>
+                        <p id="last-update-display" class="font-bold text-xl text-white"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Results Table -->
+            <div id="results-table-container" class="table-container rounded-lg shadow-lg overflow-x-auto mb-12">
+                <table id="serp-results-table" class="min-w-full text-sm">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort-key="Position" style="width: 5%;">Position</th>
+                            <th class="sortable wrap-cell" data-sort-key="Type" style="width: 10%;">Type</th>
+                            <th class="sortable wrap-cell" data-sort-key="Title" style="width: 25%;">Title</th>
+                            <th class="sortable wrap-cell" data-sort-key="URL" style="width: 15%;">URL</th>
+                            <th class="sortable" data-sort-key="WebsiteType" style="width: 10%;">Website Type</th>
+                            <th class="sortable" data-sort-key="Traffic">Traffic<br>Est.</th>
+                            <th class="sortable" data-sort-key="DomainRating">Domain<br>Rating</th>
+                            <th class="sortable" data-sort-key="ReferringDomains">Ref.<br>Domains</th>
+                            <th class="sortable" data-sort-key="Keywords" title="Number of keywords this URL ranks for">Keywords</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-tbody"></tbody>
+                </table>
+                 <div id="no-results" class="text-center p-8 text-gray-500 hidden">No results found for the selected keyword.</div>
+            </div>
+
+            <!-- Domain Analysis Report -->
+            <div id="domain-report-section" class="mt-8">
+                 <header class="text-center mb-6">
+                    <h2 class="text-2xl md:text-3xl font-bold header-text">Domain Analysis Report</h2>
+                </header>
+                <div class="card p-4 rounded-lg mb-4 flex flex-col md:flex-row gap-4 items-end">
+                    <div class="w-full md:w-1/3">
+                        <label for="domain-group-filter" class="block text-sm font-medium text-gray-300 mb-2">Filter by Keyword Group:</label>
+                        <select id="domain-group-filter" class="custom-select block w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-white"></select>
+                    </div>
+                     <div class="w-full md:w-1/3">
+                        <label for="domain-keyword-filter" class="block text-sm font-medium text-gray-300 mb-2">Filter by Keyword:</label>
+                        <input type="text" id="domain-keyword-filter" class="block w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-white" placeholder="Contains...">
+                    </div>
+                </div>
+                <div class="table-container rounded-lg shadow-lg overflow-x-auto">
+                    <table id="domain-report-table" class="min-w-full text-sm">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort-key="domain" style="width: 40%;">Domain</th>
+                                <th class="sortable" data-sort-key="appearances" style="width: 20%;">SERP Appearances</th>
+                                <th class="sortable" data-sort-key="avgPosition" style="width: 20%;">Average Position</th>
+                                <th class="sortable" data-sort-key="pageCount" style="width: 20%;">Page Count</th>
+                            </tr>
+                        </thead>
+                        <tbody id="domain-report-tbody"></tbody>
+                    </table>
+                </div>
+                <div id="domain-report-show-more-container" class="text-center mt-4"></div>
+            </div>
+            
+            <!-- Bubble Chart Section -->
+            <div id="bubble-chart-section" class="mt-12">
+                <header class="text-center mb-6">
+                    <h2 class="text-2xl md:text-3xl font-bold header-text">Domain Landscape Chart</h2>
+                </header>
+                <div id="chart-container" class="card p-4 rounded-lg">
+                    <svg id="bubble-chart"></svg>
+                </div>
+            </div>
+
+        </div>
+        
+        <!-- Footer Note -->
+        <footer class="text-center text-gray-500 text-sm mt-8">
+            <p>SERP is for US / English</p>
+        </footer>
+
+    </div>
+    <div id="chart-tooltip"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // OpenAI API Configuration
+            const OPENAI_API_KEY = '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';
+            const OPENAI_MODEL = 'ft:gpt-4.1-2025-04-14:cut-inside:serp-domain-type-classifier:C3irNB1c';
+            const websiteTypeCache = {};
+
+            // Main elements
+            const fileInput = document.getElementById('excel-file');
+            const fileNameDisplay = document.getElementById('file-name');
+            const loader = document.getElementById('loader');
+            const errorMessage = document.getElementById('error-message');
+            const uploadSection = document.getElementById('upload-section');
+            const dataSection = document.getElementById('data-section');
+            
+            // SERP filters and display
+            const groupFilter = document.getElementById('group-filter');
+            const keywordTextFilter = document.getElementById('keyword-text-filter');
+            const resultTypeFilterButton = document.getElementById('result-type-filter-button');
+            const resultTypeFilterDropdown = document.getElementById('result-type-filter-dropdown');
+            const websiteTypeFilterButton = document.getElementById('website-type-filter-button');
+            const websiteTypeFilterDropdown = document.getElementById('website-type-filter-dropdown');
+            const volumeRangeMin = document.getElementById('volume-range-min');
+            const volumeRangeValueMin = document.getElementById('volume-range-value-min');
+            const volumeRangeMax = document.getElementById('volume-range-max');
+            const volumeRangeValueMax = document.getElementById('volume-range-value-max');
+            const rangeTrackFill = document.getElementById('range-track-fill');
+            const keywordSelect = document.getElementById('keyword-select');
+            
+            // Keyword info display
+            const keywordInfo = document.getElementById('keyword-info');
+            const volumeDisplay = document.getElementById('volume-display');
+            const cpcDisplay = document.getElementById('cpc-display');
+            const intentsDisplay = document.getElementById('intents-display');
+            const lastUpdateDisplay = document.getElementById('last-update-display');
+
+            // SERP table
+            const serpTable = document.getElementById('serp-results-table');
+            const resultsTbody = document.getElementById('results-tbody');
+            const noResultsDiv = document.getElementById('no-results');
+
+            // Domain Report elements
+            const domainReportTable = document.getElementById('domain-report-table');
+            const domainGroupFilter = document.getElementById('domain-group-filter');
+            const domainKeywordFilter = document.getElementById('domain-keyword-filter');
+            const domainReportTbody = document.getElementById('domain-report-tbody');
+            const domainReportShowMoreContainer = document.getElementById('domain-report-show-more-container');
+            
+            let keywordsData = [];
+            let serpData = {};
+            let allSerpResults = [];
+            let domainReportData = [];
+            
+            let serpSortState = { key: 'Position', direction: 'asc' };
+            let domainSortState = { key: 'appearances', direction: 'desc' };
+
+            function debounce(func, delay) {
+                let timeout;
+                return function(...args) {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func.apply(this, args), delay);
+                };
+            }
+
+            fileInput.addEventListener('change', handleFile);
+            groupFilter.addEventListener('change', updateKeywordOptions);
+            
+            volumeRangeMin.addEventListener('input', handleSliders);
+            volumeRangeMax.addEventListener('input', handleSliders);
+
+            const debouncedUpdate = debounce(updateKeywordOptions, 250);
+            const debouncedDomainUpdate = debounce(generateDomainReport, 250);
+            volumeRangeMin.addEventListener('change', debouncedUpdate);
+            volumeRangeMax.addEventListener('change', debouncedUpdate);
+            keywordTextFilter.addEventListener('input', debouncedUpdate);
+            domainKeywordFilter.addEventListener('input', debouncedDomainUpdate);
+
+            keywordSelect.addEventListener('change', displayResults);
+            domainGroupFilter.addEventListener('change', generateDomainReport);
+
+            async function getWebsiteType(url, title) {
+                if (!url || !title) {
+                    return 'N/A';
+                }
+                const cacheKey = `${url}|${title}`;
+                if (websiteTypeCache[cacheKey]) {
+                    return websiteTypeCache[cacheKey];
+                }
+
+                try {
+                    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${OPENAI_API_KEY}`
+                        },
+                        body: JSON.stringify({
+                            model: OPENAI_MODEL,
+                            messages: [
+                                { role: "system", content: "You are an expert classifier of websites. You can identify a website type based on a the domain URL, and the title of a page from the domain appearing in search results then classify them into one of the following fixed categories: Discussion Platforms ,Social Networks, Video Platforms, Publishers, Brand Sites, Marketplaces, Blogs, Review Sites, Aggregators, Educational Platforms, Government & Public Services, Tools & SaaS." },
+                                { role: "user", content: `URL:${url} ,Title: ${title}` }
+                            ],
+                            max_tokens: 20,
+                            temperature: 0,
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorBody = await response.json();
+                        console.error('OpenAI API Error:', errorBody);
+                        throw new Error(`API request failed with status ${response.status}: ${errorBody.error.message}`);
+                    }
+
+                    const data = await response.json();
+                    const websiteType = data.choices[0]?.message?.content.trim() || 'Error';
+                    websiteTypeCache[cacheKey] = websiteType;
+                    return websiteType;
+                } catch (error) {
+                    console.error('Error fetching website type:', error);
+                    websiteTypeCache[cacheKey] = 'Error'; // Cache error to avoid retrying failed requests
+                    return 'Error';
+                }
+            }
+
+            function handleFile(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                fileNameDisplay.textContent = file.name;
+                loader.classList.remove('hidden');
+                errorMessage.classList.add('hidden');
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        
+                        const keywordsSheetName = "Keywords";
+                        if (!workbook.SheetNames.includes(keywordsSheetName)) throw new Error(`Sheet "${keywordsSheetName}" is missing.`);
+                        const keywordsSheet = workbook.Sheets[keywordsSheetName];
+                        keywordsData = XLSX.utils.sheet_to_json(keywordsSheet);
+                        
+                        const serpSheetName = "SERP-Results";
+                        if (!workbook.SheetNames.includes(serpSheetName)) throw new Error(`Sheet "${serpSheetName}" is missing.`);
+                        const serpSheet = workbook.Sheets[serpSheetName];
+                        allSerpResults = XLSX.utils.sheet_to_json(serpSheet);
+
+                        serpData = {};
+                        allSerpResults.forEach(row => {
+                            const keyword = row.Keyword;
+                            if (!keyword) return;
+                            
+                            if (!serpData[keyword]) {
+                                serpData[keyword] = {
+                                    results: [],
+                                    details: { CPC: row.CPC, Intents: row.Intents, 'Last Update': row['Last Update'] }
+                                };
+                            }
+                            
+                            serpData[keyword].results.push({ 
+                                Position: row.Position, Type: row.Type, Title: row.Title, URL: row.URL,
+                                Traffic: row.Traffic, DomainRating: row['Domain rating'], 
+                                ReferringDomains: row['Referring Domains'], Keywords: row.Keywords
+                            });
+                        });
+                        
+                        for (const key in serpData) {
+                            serpData[key].results.sort((a,b) => a.Position - b.Position);
+                        }
+
+                        setupSorters();
+                        initializeFilters();
+                        initializeDomainReport();
+                        uploadSection.classList.add('hidden');
+                        dataSection.classList.remove('hidden');
+
+                    } catch (err) {
+                        console.error(err);
+                        errorMessage.textContent = `Error processing file: ${err.message}`;
+                        errorMessage.classList.remove('hidden');
+                    } finally {
+                        loader.classList.add('hidden');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            function initializeFilters() {
+                const groups = ['All', ...new Set(keywordsData.map(k => k['Keyword Group']).filter(Boolean))];
+                groupFilter.innerHTML = groups.map(g => `<option value="${g}">${g}</option>`).join('');
+
+                const resultTypes = ['All', ...new Set(allSerpResults.map(r => r.Type).filter(Boolean))];
+                
+                resultTypeFilterDropdown.innerHTML = resultTypes.map(t => `
+                    <label class="flex items-center p-2 hover:bg-gray-700 cursor-pointer">
+                        <input type="checkbox" class="form-checkbox h-4 w-4 bg-gray-800 border-gray-600 rounded text-white focus:ring-white" value="${t}" ${t === 'All' ? 'checked' : ''}>
+                        <span class="ml-2 text-sm">${t}</span>
+                    </label>
+                `).join('');
+                
+                resultTypeFilterButton.addEventListener('click', () => {
+                    resultTypeFilterDropdown.classList.toggle('hidden');
+                });
+
+                resultTypeFilterDropdown.addEventListener('change', (e) => {
+                    const checkboxes = resultTypeFilterDropdown.querySelectorAll('input[type="checkbox"]');
+                    const allCheckbox = checkboxes[0];
+                    const otherCheckboxes = Array.from(checkboxes).slice(1);
+
+                    if (e.target === allCheckbox && allCheckbox.checked) {
+                        otherCheckboxes.forEach(cb => cb.checked = false);
+                    } else if (e.target !== allCheckbox && e.target.checked) {
+                        allCheckbox.checked = false;
+                    }
+                    
+                    updateResultTypeButtonText();
+                    displayResults();
+                });
+                
+                const websiteTypes = ['All', 'Discussion Platforms', 'Social Networks', 'Video Platforms', 'Publishers', 'Brand Sites', 'Marketplaces', 'Blogs', 'Review Sites', 'Aggregators', 'Educational Platforms', 'Government & Public Services', 'Tools & SaaS'];
+                websiteTypeFilterDropdown.innerHTML = websiteTypes.map(t => `
+                    <label class="flex items-center p-2 hover:bg-gray-700 cursor-pointer">
+                        <input type="checkbox" class="form-checkbox h-4 w-4 bg-gray-800 border-gray-600 rounded text-white focus:ring-white" value="${t}" ${t === 'All' ? 'checked' : ''}>
+                        <span class="ml-2 text-sm">${t}</span>
+                    </label>
+                `).join('');
+
+                websiteTypeFilterButton.addEventListener('click', () => {
+                    websiteTypeFilterDropdown.classList.toggle('hidden');
+                });
+
+                websiteTypeFilterDropdown.addEventListener('change', (e) => {
+                    const checkboxes = websiteTypeFilterDropdown.querySelectorAll('input[type="checkbox"]');
+                    const allCheckbox = checkboxes[0];
+                    const otherCheckboxes = Array.from(checkboxes).slice(1);
+
+                    if (e.target === allCheckbox && allCheckbox.checked) {
+                        otherCheckboxes.forEach(cb => cb.checked = false);
+                    } else if (e.target !== allCheckbox && e.target.checked) {
+                        allCheckbox.checked = false;
+                    }
+                    
+                    updateWebsiteTypeButtonText();
+                    displayResults();
+                });
+
+
+                const volumes = keywordsData.map(k => k['Global volume']).filter(v => typeof v === 'number');
+                const minVolume = Math.min(...volumes, 0);
+                const maxVolume = Math.max(...volumes, 0);
+                
+                [volumeRangeMin, volumeRangeMax].forEach(slider => {
+                    slider.min = minVolume;
+                    slider.max = maxVolume;
+                });
+                
+                volumeRangeMin.value = minVolume;
+                volumeRangeMax.value = maxVolume;
+                
+                handleSliders(); 
+                updateKeywordOptions();
+            }
+            
+            function updateResultTypeButtonText() {
+                const checked = Array.from(resultTypeFilterDropdown.querySelectorAll('input:checked')).map(cb => cb.value);
+                if (checked.includes('All') || checked.length === 0) {
+                    resultTypeFilterButton.textContent = 'All';
+                } else if (checked.length === 1) {
+                    resultTypeFilterButton.textContent = checked[0];
+                } else {
+                    resultTypeFilterButton.textContent = `${checked.length} selected`;
+                }
+            }
+            
+            function updateWebsiteTypeButtonText() {
+                const checked = Array.from(websiteTypeFilterDropdown.querySelectorAll('input:checked')).map(cb => cb.value);
+                if (checked.includes('All') || checked.length === 0) {
+                    websiteTypeFilterButton.textContent = 'All';
+                } else if (checked.length === 1) {
+                    websiteTypeFilterButton.textContent = checked[0];
+                } else {
+                    websiteTypeFilterButton.textContent = `${checked.length} selected`;
+                }
+            }
+            
+            function handleSliders() {
+                let minVal = parseInt(volumeRangeMin.value);
+                let maxVal = parseInt(volumeRangeMax.value);
+
+                if (minVal > maxVal) {
+                    [minVal, maxVal] = [maxVal, minVal];
+                    volumeRangeMin.value = minVal;
+                    volumeRangeMax.value = maxVal;
+                }
+
+                volumeRangeValueMin.textContent = minVal.toLocaleString();
+                volumeRangeValueMax.textContent = maxVal.toLocaleString();
+                updateRangeTrackFill();
+            }
+
+            function updateRangeTrackFill() {
+                const overallMin = parseInt(volumeRangeMin.min);
+                const overallMax = parseInt(volumeRangeMin.max);
+                const range = overallMax - overallMin;
+                if (range === 0) {
+                    rangeTrackFill.style.left = `0%`;
+                    rangeTrackFill.style.width = `100%`;
+                    return;
+                };
+
+                const minPercent = ((volumeRangeMin.value - overallMin) / range) * 100;
+                const maxPercent = ((volumeRangeMax.value - overallMin) / range) * 100;
+
+                rangeTrackFill.style.left = `${minPercent}%`;
+                rangeTrackFill.style.width = `${maxPercent - minPercent}%`;
+            }
+
+            function updateKeywordOptions() {
+                const selectedGroup = groupFilter.value;
+                const minVolume = parseInt(volumeRangeMin.value, 10);
+                const maxVolume = parseInt(volumeRangeMax.value, 10);
+                const keywordFilter = keywordTextFilter.value.toLowerCase();
+
+                let filteredKeywords = keywordsData;
+
+                if (selectedGroup !== 'All') {
+                    filteredKeywords = filteredKeywords.filter(k => k['Keyword Group'] === selectedGroup);
+                }
+                
+                filteredKeywords = filteredKeywords.filter(k => {
+                    const volume = k['Global volume'];
+                    return volume >= minVolume && volume <= maxVolume;
+                });
+
+                if (keywordFilter) {
+                    filteredKeywords = filteredKeywords.filter(k => k.Keyword.toLowerCase().includes(keywordFilter));
+                }
+                
+                filteredKeywords.sort((a, b) => b['Global volume'] - a['Global volume']);
+
+                keywordSelect.innerHTML = filteredKeywords.map(k => 
+                    `<option value="${k.Keyword}">${k.Keyword} (${Number(k['Global volume']).toLocaleString()})</option>`
+                ).join('');
+                
+                displayResults();
+            }
+
+            function getTypeStyles(type) {
+                if (!type) return 'bg-gray-600 text-gray-100';
+                const lowerType = type.toLowerCase();
+                if (lowerType.includes('organic')) return 'bg-green-600 text-green-100';
+                if (lowerType.includes('sitelinks')) return 'bg-purple-600 text-purple-100';
+                if (lowerType.includes('people also ask')) return 'bg-gray-500 text-gray-100';
+                if (lowerType.includes('video')) return 'bg-red-600 text-red-100';
+                if (lowerType.includes('top stories')) return 'bg-yellow-500 text-yellow-100';
+                if (lowerType.includes('ads')) return 'bg-blue-600 text-blue-100';
+                if (lowerType.includes('discussions')) return 'bg-indigo-600 text-indigo-100';
+                return 'bg-gray-600 text-gray-100';
+            }
+            
+            function getWebsiteTypeStyle(websiteType) {
+                if (!websiteType) return 'type-default';
+                const lowerType = websiteType.toLowerCase().replace(/ & /g, '-').replace(/\s+/g, '-');
+                const classMap = {
+                    'discussion-platforms': 'type-discussion-platforms',
+                    'social-networks': 'type-social-networks',
+                    'video-platforms': 'type-video-platforms',
+                    'publishers': 'type-publishers',
+                    'brand-sites': 'type-brand-sites',
+                    'marketplaces': 'type-marketplaces',
+                    'blogs': 'type-blogs',
+                    'review-sites': 'type-review-sites',
+                    'aggregators': 'type-aggregators',
+                    'educational-platforms': 'type-educational-platforms',
+                    'government-public-services': 'type-government-public-services',
+                    'tools-saas': 'type-tools-saas'
+                };
+                return classMap[lowerType] || 'type-default';
+            }
+
+            async function displayResults() {
+                const selectedKeyword = keywordSelect.value;
+                if (!selectedKeyword) {
+                    keywordInfo.classList.add('hidden');
+                    resultsTbody.innerHTML = '';
+                    noResultsDiv.classList.remove('hidden');
+                    noResultsDiv.textContent = "No keywords match the current filters.";
+                    return;
+                }
+
+                const keywordDetails = keywordsData.find(k => k.Keyword === selectedKeyword);
+                const serpDetails = serpData[selectedKeyword]?.details;
+
+                if (keywordDetails && serpDetails) {
+                    volumeDisplay.textContent = Number(keywordDetails['Global volume'] || 0).toLocaleString();
+                    cpcDisplay.textContent = `$${Number(serpDetails.CPC || 0).toFixed(2)}`;
+                    intentsDisplay.textContent = serpDetails.Intents || 'N/A';
+                    
+                    let lastUpdate = 'N/A';
+                    const dateValue = serpDetails['Last Update'];
+                    if (dateValue) {
+                       if (typeof dateValue === 'number') { 
+                            const excelEpoch = new Date(1899, 11, 30);
+                            const jsDate = new Date(excelEpoch.getTime() + dateValue * 86400000);
+                            lastUpdate = jsDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                        } else { 
+                            const jsDate = new Date(dateValue);
+                            if (!isNaN(jsDate)) {
+                               lastUpdate = jsDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                            } else {
+                               lastUpdate = dateValue;
+                            }
+                        }
+                    }
+                    lastUpdateDisplay.textContent = lastUpdate;
+
+                    keywordInfo.classList.remove('hidden');
+                } else {
+                    keywordInfo.classList.add('hidden');
+                }
+
+                let results = [...(serpData[selectedKeyword]?.results || [])];
+                
+                const selectedResultTypes = Array.from(resultTypeFilterDropdown.querySelectorAll('input:checked')).map(cb => cb.value);
+                if (!selectedResultTypes.includes('All') && selectedResultTypes.length > 0) {
+                    results = results.filter(r => selectedResultTypes.includes(r.Type));
+                }
+                
+                const typePromises = results.map(res => {
+                    if (res.Type && res.Type.toLowerCase().includes('people also ask')) {
+                        return Promise.resolve('');
+                    }
+                    return getWebsiteType(res.URL, res.Title);
+                });
+                const websiteTypes = await Promise.all(typePromises);
+
+                results.forEach((res, index) => {
+                    res.WebsiteType = websiteTypes[index];
+                });
+
+                const selectedWebsiteTypes = Array.from(websiteTypeFilterDropdown.querySelectorAll('input:checked')).map(cb => cb.value);
+                if (!selectedWebsiteTypes.includes('All') && selectedWebsiteTypes.length > 0) {
+                     results = results.filter(r => selectedWebsiteTypes.includes(r.WebsiteType));
+                }
+
+                sortData(results, serpSortState);
+                resultsTbody.innerHTML = '';
+
+                if (results.length === 0) {
+                    noResultsDiv.classList.remove('hidden');
+                    noResultsDiv.textContent = "No SERP results found for the selected filters.";
+                } else {
+                    noResultsDiv.classList.add('hidden');
+                    results.forEach((res, index) => {
+                        const row = document.createElement('tr');
+                        
+                        let urlCellContent = '';
+                        if (res.URL) {
+                            try {
+                                const fullUrl = res.URL.startsWith('http') ? res.URL : 'https://' + res.URL;
+                                const domain = new URL(fullUrl).hostname.replace(/^www\./, '');
+                                urlCellContent = `<a href="${fullUrl}" target="_blank" class="text-blue-400 hover:underline">${domain}</a>`;
+                            } catch (e) {
+                                urlCellContent = res.URL;
+                            }
+                        }
+
+                        const typeStyle = getTypeStyles(res.Type);
+                        const websiteTypeStyle = getWebsiteTypeStyle(res.WebsiteType);
+                        
+                        row.innerHTML = `
+                            <td>${res.Position || ''}</td>
+                            <td class="wrap-cell"><span class="${typeStyle} px-2 py-1 rounded-md text-[11px] font-semibold type-label">${res.Type || ''}</span></td>
+                            <td class="wrap-cell">${res.Title || ''}</td>
+                            <td class="wrap-cell">${urlCellContent}</td>
+                            <td class="website-type-cell"><span class="${websiteTypeStyle} px-2 py-1 rounded-md text-[11px] font-semibold type-label">${res.WebsiteType || ''}</span></td>
+                            <td>${res.Traffic ? Number(res.Traffic).toLocaleString() : ''}</td>
+                            <td>${res.DomainRating || ''}</td>
+                            <td>${res.ReferringDomains ? Number(res.ReferringDomains).toLocaleString() : ''}</td>
+                            <td>${res.Keywords ? Number(res.Keywords).toLocaleString() : ''}</td>
+                        `;
+                        resultsTbody.appendChild(row);
+                    });
+                }
+                updateSortIcons(serpTable, serpSortState);
+            }
+
+            // --- Domain Report Logic ---
+            function initializeDomainReport() {
+                const groups = ['All', ...new Set(keywordsData.map(k => k['Keyword Group']).filter(Boolean))];
+                domainGroupFilter.innerHTML = groups.map(g => `<option value="${g}">${g}</option>`).join('');
+                generateDomainReport();
+            }
+
+            function generateDomainReport() {
+                const selectedGroup = domainGroupFilter.value;
+                const keywordFilter = domainKeywordFilter.value.toLowerCase();
+                
+                let groupKeywords = keywordsData;
+                if (selectedGroup !== 'All') {
+                    groupKeywords = groupKeywords.filter(k => k['Keyword Group'] === selectedGroup);
+                }
+                if (keywordFilter) {
+                    groupKeywords = groupKeywords.filter(k => k.Keyword.toLowerCase().includes(keywordFilter));
+                }
+
+                const keywordsInGroupMap = new Map(groupKeywords.map(k => [k.Keyword, k['Global volume']]));
+                const relevantResults = allSerpResults.filter(r => keywordsInGroupMap.has(r.Keyword));
+                const domainStats = {};
+
+                relevantResults.forEach(res => {
+                    if (!res.URL || isNaN(res.Position) || res.Position === null) return;
+                    try {
+                        const fullUrl = res.URL.startsWith('http') ? res.URL : 'https://' + res.URL;
+                        const domain = new URL(fullUrl).hostname.replace(/^www\./, '');
+                        
+                        if (domain === 'google.com') return; // Exclude google.com
+
+                        if (!domainStats[domain]) {
+                            domainStats[domain] = { appearances: 0, totalPosition: 0, urls: {}, totalVolume: 0, seenKeywords: new Set() };
+                        }
+                        domainStats[domain].appearances++;
+                        domainStats[domain].totalPosition += res.Position;
+
+                        if(!domainStats[domain].seenKeywords.has(res.Keyword)) {
+                            domainStats[domain].totalVolume += keywordsInGroupMap.get(res.Keyword) || 0;
+                            domainStats[domain].seenKeywords.add(res.Keyword);
+                        }
+                        
+                        if (!domainStats[domain].urls[fullUrl]) {
+                            domainStats[domain].urls[fullUrl] = { count: 0, totalPosition: 0 };
+                        }
+                        domainStats[domain].urls[fullUrl].count++;
+                        domainStats[domain].urls[fullUrl].totalPosition += res.Position;
+
+                    } catch (e) { /* Ignore invalid URLs */ }
+                });
+
+                domainReportData = Object.entries(domainStats)
+                    .map(([domain, data]) => {
+                        const urlsWithCounts = Object.entries(data.urls)
+                            .map(([url, urlData]) => ({ 
+                                url, 
+                                count: urlData.count,
+                                avgPosition: (urlData.totalPosition / urlData.count).toFixed(2)
+                            }))
+                            .sort((a, b) => b.count - a.count);
+
+                        return {
+                            domain,
+                            appearances: data.appearances,
+                            avgPosition: (data.totalPosition / data.appearances).toFixed(2),
+                            pageCount: urlsWithCounts.length,
+                            urls: urlsWithCounts,
+                            totalVolume: data.totalVolume
+                        }
+                    });
+                
+                renderDomainReport();
+                renderBubbleChart(domainReportData);
+            }
+
+            function renderDomainReport(showAll = false) {
+                sortData(domainReportData, domainSortState);
+                
+                const dataToRender = showAll ? domainReportData : domainReportData.slice(0, 20);
+                domainReportTbody.innerHTML = '';
+                
+                dataToRender.forEach(data => {
+                    const mainRow = document.createElement('tr');
+                    mainRow.classList.add('domain-row');
+                    mainRow.innerHTML = `
+                        <td>${data.domain}</td>
+                        <td>${data.appearances.toLocaleString()}</td>
+                        <td>${data.avgPosition}</td>
+                        <td>${data.pageCount.toLocaleString()}</td>
+                    `;
+
+                    const detailsRow = document.createElement('tr');
+                    detailsRow.classList.add('url-details-row', 'hidden');
+                    const detailsCell = document.createElement('td');
+                    detailsCell.colSpan = 4;
+                    
+                    const urlListContainer = document.createElement('div');
+                    urlListContainer.classList.add('p-2');
+                    
+                    const header = document.createElement('div');
+                    header.classList.add('flex', 'justify-between', 'font-semibold', 'text-gray-400', 'text-xs', 'pb-2', 'border-b', 'border-gray-600');
+                    header.innerHTML = `
+                        <span class="flex-grow">URL</span>
+                        <span class="w-24 text-center">Appearances</span>
+                        <span class="w-24 text-center">Avg. Position</span>
+                    `;
+                    urlListContainer.appendChild(header);
+
+                    data.urls.forEach(urlData => {
+                        const urlContainer = document.createElement('div');
+                        
+                        const urlRow = document.createElement('div');
+                        urlRow.classList.add('flex', 'justify-between', 'items-center', 'py-1');
+                        urlRow.innerHTML = `
+                            <div class="flex items-center flex-grow min-w-0">
+                                <button class="expand-btn p-1 rounded-full hover:bg-gray-700 mr-2 flex-shrink-0">
+                                    <svg class="w-3 h-3 transform transition-transform text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                                <div class="truncate" title="${urlData.url}">
+                                    <a href="${urlData.url}" target="_blank" class="text-blue-400 hover:underline text-xs">${urlData.url}</a>
+                                </div>
+                            </div>
+                            <span class="text-gray-300 text-xs font-semibold w-24 text-center flex-shrink-0">${urlData.count}</span>
+                            <span class="text-gray-300 text-xs w-24 text-center flex-shrink-0">${urlData.avgPosition}</span>
+                        `;
+                        
+                        const keywordDetailsContainer = document.createElement('div');
+                        keywordDetailsContainer.classList.add('hidden', 'p-2', 'pl-10', 'bg-gray-800', 'rounded-b-lg');
+                        
+                        const expandButton = urlRow.querySelector('.expand-btn');
+                        const arrowIcon = expandButton.querySelector('svg');
+
+                        expandButton.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            
+                            if (keywordDetailsContainer.innerHTML === '') {
+                                const keywordTable = document.createElement('table');
+                                keywordTable.classList.add('min-w-full', 'text-xs');
+                                keywordTable.innerHTML = `
+                                    <thead class="text-gray-400">
+                                        <tr>
+                                            <th class="w-3/5">Keyword</th>
+                                            <th class="text-center">Volume</th>
+                                            <th class="text-center">Position</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                `;
+                                const tbody = keywordTable.querySelector('tbody');
+                                const keywordAppearances = allSerpResults.filter(res => res.URL === urlData.url);
+                                keywordAppearances.forEach(appearance => {
+                                    const kwd = keywordsData.find(k => k.Keyword === appearance.Keyword);
+                                    const volume = kwd ? Number(kwd['Global volume']).toLocaleString() : 'N/A';
+                                    const tr = document.createElement('tr');
+                                    tr.innerHTML = `
+                                        <td>${appearance.Keyword}</td>
+                                        <td class="text-center">${volume}</td>
+                                        <td class="text-center">${appearance.Position}</td>
+                                    `;
+                                    tbody.appendChild(tr);
+                                });
+                                keywordDetailsContainer.appendChild(keywordTable);
+                            }
+                            keywordDetailsContainer.classList.toggle('hidden');
+                            arrowIcon.classList.toggle('rotate-180');
+                        });
+                        
+                        urlContainer.appendChild(urlRow);
+                        urlContainer.appendChild(keywordDetailsContainer);
+                        urlListContainer.appendChild(urlContainer);
+                    });
+                    detailsCell.appendChild(urlListContainer);
+                    detailsRow.appendChild(detailsCell);
+                    
+                    domainReportTbody.appendChild(mainRow);
+                    domainReportTbody.appendChild(detailsRow);
+
+                    mainRow.addEventListener('click', () => {
+                        detailsRow.classList.toggle('hidden');
+                    });
+                });
+                updateSortIcons(domainReportTable, domainSortState);
+                
+                domainReportShowMoreContainer.innerHTML = '';
+                if (domainReportData.length > 20) {
+                    if (showAll) {
+                        const showLessButton = document.createElement('button');
+                        showLessButton.textContent = 'Show Less';
+                        showLessButton.className = 'file-upload-btn cursor-pointer font-bold py-2 px-4 rounded-lg';
+                        showLessButton.onclick = () => renderDomainReport(false);
+                        domainReportShowMoreContainer.appendChild(showLessButton);
+                    } else {
+                        const showMoreButton = document.createElement('button');
+                        showMoreButton.textContent = 'Show More';
+                        showMoreButton.className = 'file-upload-btn cursor-pointer font-bold py-2 px-4 rounded-lg';
+                        showMoreButton.onclick = () => renderDomainReport(true);
+                        domainReportShowMoreContainer.appendChild(showMoreButton);
+                    }
+                }
+            }
+
+            // --- Bubble Chart Logic ---
+            function renderBubbleChart(data) {
+                const container = d3.select("#chart-container");
+                d3.select("#bubble-chart").selectAll("*").remove(); // Clear previous chart
+
+                if (!data || data.length === 0) return;
+
+                const width = container.node().getBoundingClientRect().width;
+                const height = 500;
+                const margin = { top: 20, right: 20, bottom: 60, left: 80 };
+
+                const svg = d3.select("#bubble-chart")
+                    .attr("width", width)
+                    .attr("height", height)
+                    .attr("viewBox", [0, 0, width, height])
+                    .attr("style", "max-width: 100%; height: auto;");
+
+                const xDomain = d3.extent(data, d => +d.avgPosition);
+                const yDomain = d3.extent(data, d => d.totalVolume);
+                const sizeDomain = d3.extent(data, d => d.pageCount);
+
+                const xScale = d3.scaleLinear()
+                    .domain([xDomain[1] + 1, 1]) // Inverted scale
+                    .range([margin.left, width - margin.right]);
+
+                const yScale = d3.scaleLinear()
+                    .domain([0, yDomain[1]]).nice()
+                    .range([height - margin.bottom, margin.top]);
+
+                const sizeScale = d3.scaleSqrt()
+                    .domain([0, sizeDomain[1]]).nice()
+                    .range([4, 40]);
+
+                const xAxis = g => g
+                    .attr("transform", `translate(0,${height - margin.bottom})`)
+                    .call(d3.axisBottom(xScale).ticks(width / 80).tickSizeOuter(0))
+                    .call(g => g.selectAll(".domain, .tick line").attr("stroke", "#4a5568"))
+                    .call(g => g.selectAll("text").attr("fill", "#ffffff"))
+                    .call(g => g.append("text")
+                        .attr("x", width / 2)
+                        .attr("y", margin.bottom - 10)
+                        .attr("fill", "#ffffff")
+                        .attr("text-anchor", "middle")
+                        .text("Average Position"));
+
+                const yAxis = g => g
+                    .attr("transform", `translate(${margin.left},0)`)
+                    .call(d3.axisLeft(yScale).ticks(height / 40))
+                    .call(g => g.selectAll(".domain, .tick line").attr("stroke", "#4a5568"))
+                    .call(g => g.selectAll("text").attr("fill", "#ffffff"))
+                    .call(g => g.append("text")
+                        .attr("x", -margin.left)
+                        .attr("y", 10)
+                        .attr("fill", "#ffffff")
+                        .attr("text-anchor", "start")
+                        .text("↑ Total Keyword Volume"));
+
+                svg.append("g").call(xAxis);
+                svg.append("g").call(yAxis);
+
+                const tooltip = d3.select("#chart-tooltip");
+
+                svg.append("g")
+                    .selectAll("circle")
+                    .data(data)
+                    .join("circle")
+                    .attr("cx", d => xScale(+d.avgPosition))
+                    .attr("cy", d => yScale(d.totalVolume))
+                    .attr("r", d => sizeScale(d.pageCount))
+                    .attr("fill", "#49b9b1") /* Changed from white to new color */
+                    .attr("opacity", 0.7)
+                    .on("mouseover", (event, d) => {
+                        tooltip.style("opacity", 1);
+                    })
+                    .on("mousemove", (event, d) => {
+                        tooltip.html(`
+                            <strong>${d.domain}</strong><br>
+                            Avg. Position: ${d.avgPosition}<br>
+                            Total Volume: ${d.totalVolume.toLocaleString()}<br>
+                            Page Count: ${d.pageCount.toLocaleString()}
+                        `)
+                        .style("left", (event.pageX + 15) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", () => {
+                        tooltip.style("opacity", 0);
+                    });
+            }
+
+
+            // --- Generic Sorting Logic ---
+            function setupSorters() {
+                serpTable.querySelectorAll('thead th.sortable').forEach(header => {
+                    header.innerHTML += `<span class="sort-icon"></span>`;
+                    header.addEventListener('click', () => {
+                        const key = header.dataset.sortKey;
+                        if (serpSortState.key === key) {
+                            serpSortState.direction = serpSortState.direction === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            serpSortState.key = key;
+                            serpSortState.direction = 'asc';
+                        }
+                        displayResults();
+                    });
+                });
+
+                domainReportTable.querySelectorAll('thead th.sortable').forEach(header => {
+                    header.innerHTML += `<span class="sort-icon"></span>`;
+                    header.addEventListener('click', () => {
+                        const key = header.dataset.sortKey;
+                        if (domainSortState.key === key) {
+                            domainSortState.direction = domainSortState.direction === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            domainSortState.key = key;
+                            domainSortState.direction = key === 'appearances' || key === 'pageCount' ? 'desc' : 'asc';
+                        }
+                        renderDomainReport();
+                    });
+                });
+            }
+
+            function sortData(dataArray, state) {
+                const { key, direction } = state;
+                if (!key) return;
+
+                dataArray.sort((a, b) => {
+                    let valA = a[key];
+                    let valB = b[key];
+
+                    if (typeof valA === 'string') valA = valA.toLowerCase();
+                    if (typeof valB === 'string') valB = valB.toLowerCase();
+                    
+                    if (valA === null || valA === undefined) return 1;
+                    if (valB === null || valB === undefined) return -1;
+
+                    if (valA < valB) return direction === 'asc' ? -1 : 1;
+                    if (valA > valB) return direction === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+
+            function updateSortIcons(table, state) {
+                table.querySelectorAll('thead th.sortable').forEach(header => {
+                    header.classList.remove('asc', 'desc');
+                    const icon = header.querySelector('.sort-icon');
+                    if (icon) { // Check if icon exists before modifying
+                        icon.textContent = '';
+                        if (header.dataset.sortKey === state.key) {
+                            header.classList.add(state.direction);
+                            icon.textContent = state.direction === 'asc' ? '▲' : '▼';
+                        }
+                    }
+                });
+            }
+
+        });
+    </script>
+</body>
+</html>
