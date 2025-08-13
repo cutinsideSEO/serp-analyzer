@@ -34,8 +34,13 @@
             border: 1px solid #4a5568;
         }
         .file-upload-btn {
-            background-color: #49b9b1; /* Changed background color */
-            color: #ffffff; /* Changed text color */
+            background-color: #f7caf1;
+            color: #000000;
+            border: 1px solid #4a5568;
+        }
+        .pagination-btn {
+            background-color: #f7caf1;
+            color: #000000;
             border: 1px solid #4a5568;
         }
         /* Custom scrollbar */
@@ -102,7 +107,7 @@
             appearance: none;
             width: 20px;
             height: 20px;
-            background: #ffffff; /* Changed from orange to white */
+            background: #f7caf1; /* Changed color */
             cursor: pointer;
             border-radius: 50%;
             pointer-events: auto; /* Make thumb clickable */
@@ -110,7 +115,7 @@
         .dual-slider-container input[type="range"]::-moz-range-thumb {
             width: 20px;
             height: 20px;
-            background: #ffffff; /* Changed from orange to white */
+            background: #f7caf1; /* Changed color */
             cursor: pointer;
             border-radius: 50%;
             pointer-events: auto; /* Make thumb clickable */
@@ -127,7 +132,7 @@
         #range-track-fill {
             position: absolute;
             height: 8px;
-            background: #ffffff; /* Changed from orange to white */
+            background: #f7caf1; /* Changed color */
             border-radius: 5px;
             top: 50%;
             transform: translateY(-50%);
@@ -178,6 +183,12 @@
         .type-government-public-services { background-color: #673AB7; color: #ffffff; }
         .type-tools-saas { background-color: #2196F3; color: #ffffff; }
         .type-default { background-color: #374151; color: #ffffff; }
+        
+        /* Custom Checkbox Color */
+        input[type="checkbox"]:checked {
+            background-color: #f7caf1;
+            border-color: #f7caf1;
+        }
     </style>
 </head>
 <body class="antialiased">
@@ -187,8 +198,8 @@
         <!-- Main Header -->
         <div class="flex justify-between items-center mb-8 px-4">
             <header class="text-left">
-                <h1 class="text-3xl md:text-4xl font-bold" style="color: #49b9b1;">SERP Domain Analyzer</h1>
-                <p class="text-gray-400 mt-2">Upload an Excel file to analyze search results</p>
+                <h1 class="text-3xl md:text-4xl font-bold" style="color: #49b9b1;">SERP Analyzer</h1>
+                <p id="subtitle" class="text-gray-400 mt-2">Upload an Excel file to analyze search results</p>
             </header>
             <img src="https://cutinside.com/llm-perception-tool/logo.png" alt="Cutinside Logo" class="h-12" onerror="this.style.display='none'">
         </div>
@@ -197,7 +208,7 @@
         <div id="upload-section" class="max-w-xl mx-auto text-center card p-8 rounded-lg shadow-lg">
             <h2 class="text-2xl font-semibold mb-4" style="color: #49b9b1;">Get Started</h2>
             <p class="text-gray-400 mb-6">Select an Excel file containing two sheets: "Keywords" and "SERP-Results".</p>
-            <label for="excel-file" class="file-upload-btn cursor-pointer inline-block font-bold py-3 px-6 rounded-lg shadow-md hover:bg-teal-500 transition-colors duration-200">
+            <label for="excel-file" class="file-upload-btn cursor-pointer inline-block font-bold py-3 px-6 rounded-lg shadow-md hover:bg-pink-200 transition-colors duration-200">
                 Select Excel File
             </label>
             <input type="file" id="excel-file" accept=".xlsx, .xls">
@@ -332,7 +343,7 @@
                         <tbody id="domain-report-tbody"></tbody>
                     </table>
                 </div>
-                <div id="domain-report-show-more-container" class="text-center mt-4"></div>
+                <div id="domain-report-pagination-container" class="flex justify-center items-center mt-4 space-x-2"></div>
             </div>
             
             <!-- Bubble Chart Section -->
@@ -358,7 +369,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // OpenAI API Configuration
-            const OPENAI_API_KEY = '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';
+            const OPENAI_API_KEY = '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';
             const OPENAI_MODEL = 'ft:gpt-4.1-2025-04-14:cut-inside:serp-domain-type-classifier:C3irNB1c';
             const websiteTypeCache = {};
 
@@ -401,7 +412,7 @@
             const domainGroupFilter = document.getElementById('domain-group-filter');
             const domainKeywordFilter = document.getElementById('domain-keyword-filter');
             const domainReportTbody = document.getElementById('domain-report-tbody');
-            const domainReportShowMoreContainer = document.getElementById('domain-report-show-more-container');
+            const domainReportPaginationContainer = document.getElementById('domain-report-pagination-container');
             
             let keywordsData = [];
             let serpData = {};
@@ -410,6 +421,7 @@
             
             let serpSortState = { key: 'Position', direction: 'asc' };
             let domainSortState = { key: 'appearances', direction: 'desc' };
+            let currentDomainPage = 1;
 
             function debounce(func, delay) {
                 let timeout;
@@ -436,6 +448,9 @@
             domainGroupFilter.addEventListener('change', generateDomainReport);
 
             async function getWebsiteType(url, title) {
+                if (OPENAI_API_KEY === 'YOUR_OPENAI_API_KEY' || !OPENAI_API_KEY) {
+                    return 'API Key Missing';
+                }
                 if (!url || !title) {
                     return 'N/A';
                 }
@@ -463,6 +478,10 @@
                     });
 
                     if (!response.ok) {
+                        if (response.status === 401) {
+                             console.error('OpenAI API Error: Invalid API Key');
+                             return 'Invalid API Key';
+                        }
                         const errorBody = await response.json();
                         console.error('OpenAI API Error:', errorBody);
                         throw new Error(`API request failed with status ${response.status}: ${errorBody.error.message}`);
@@ -525,6 +544,11 @@
                         for (const key in serpData) {
                             serpData[key].results.sort((a,b) => a.Position - b.Position);
                         }
+                        
+                        const subtitle = document.getElementById('subtitle');
+                        if (subtitle) {
+                            subtitle.style.display = 'none';
+                        }
 
                         setupSorters();
                         initializeFilters();
@@ -551,7 +575,7 @@
                 
                 resultTypeFilterDropdown.innerHTML = resultTypes.map(t => `
                     <label class="flex items-center p-2 hover:bg-gray-700 cursor-pointer">
-                        <input type="checkbox" class="form-checkbox h-4 w-4 bg-gray-800 border-gray-600 rounded text-white focus:ring-white" value="${t}" ${t === 'All' ? 'checked' : ''}>
+                        <input type="checkbox" class="form-checkbox h-4 w-4 bg-gray-800 border-gray-600 rounded text-pink-400 focus:ring-pink-400" value="${t}" ${t === 'All' ? 'checked' : ''}>
                         <span class="ml-2 text-sm">${t}</span>
                     </label>
                 `).join('');
@@ -578,7 +602,7 @@
                 const websiteTypes = ['All', 'Discussion Platforms', 'Social Networks', 'Video Platforms', 'Publishers', 'Brand Sites', 'Marketplaces', 'Blogs', 'Review Sites', 'Aggregators', 'Educational Platforms', 'Government & Public Services', 'Tools & SaaS'];
                 websiteTypeFilterDropdown.innerHTML = websiteTypes.map(t => `
                     <label class="flex items-center p-2 hover:bg-gray-700 cursor-pointer">
-                        <input type="checkbox" class="form-checkbox h-4 w-4 bg-gray-800 border-gray-600 rounded text-white focus:ring-white" value="${t}" ${t === 'All' ? 'checked' : ''}>
+                        <input type="checkbox" class="form-checkbox h-4 w-4 bg-gray-800 border-gray-600 rounded text-pink-400 focus:ring-pink-400" value="${t}" ${t === 'All' ? 'checked' : ''}>
                         <span class="ml-2 text-sm">${t}</span>
                     </label>
                 `).join('');
@@ -785,9 +809,6 @@
                 }
                 
                 const typePromises = results.map(res => {
-                    if (res.Type && res.Type.toLowerCase().includes('people also ask')) {
-                        return Promise.resolve('');
-                    }
                     return getWebsiteType(res.URL, res.Title);
                 });
                 const websiteTypes = await Promise.all(typePromises);
@@ -918,10 +939,15 @@
                 renderBubbleChart(domainReportData);
             }
 
-            function renderDomainReport(showAll = false) {
+            function renderDomainReport(page = 1) {
+                currentDomainPage = page;
                 sortData(domainReportData, domainSortState);
                 
-                const dataToRender = showAll ? domainReportData : domainReportData.slice(0, 20);
+                const itemsPerPage = 25;
+                const start = (page - 1) * itemsPerPage;
+                const end = start + itemsPerPage;
+                const dataToRender = domainReportData.slice(start, end);
+
                 domainReportTbody.innerHTML = '';
                 
                 dataToRender.forEach(data => {
@@ -1025,23 +1051,41 @@
                     });
                 });
                 updateSortIcons(domainReportTable, domainSortState);
-                
-                domainReportShowMoreContainer.innerHTML = '';
-                if (domainReportData.length > 20) {
-                    if (showAll) {
-                        const showLessButton = document.createElement('button');
-                        showLessButton.textContent = 'Show Less';
-                        showLessButton.className = 'file-upload-btn cursor-pointer font-bold py-2 px-4 rounded-lg';
-                        showLessButton.onclick = () => renderDomainReport(false);
-                        domainReportShowMoreContainer.appendChild(showLessButton);
-                    } else {
-                        const showMoreButton = document.createElement('button');
-                        showMoreButton.textContent = 'Show More';
-                        showMoreButton.className = 'file-upload-btn cursor-pointer font-bold py-2 px-4 rounded-lg';
-                        showMoreButton.onclick = () => renderDomainReport(true);
-                        domainReportShowMoreContainer.appendChild(showMoreButton);
-                    }
+                renderPaginationControls();
+            }
+
+            function renderPaginationControls() {
+                domainReportPaginationContainer.innerHTML = '';
+                const itemsPerPage = 25;
+                const totalPages = Math.ceil(domainReportData.length / itemsPerPage);
+
+                if (totalPages <= 1) return;
+
+                // Previous Button
+                const prevButton = document.createElement('button');
+                prevButton.textContent = 'Previous';
+                prevButton.className = 'pagination-btn cursor-pointer font-bold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed';
+                if (currentDomainPage === 1) {
+                    prevButton.disabled = true;
                 }
+                prevButton.onclick = () => renderDomainReport(currentDomainPage - 1);
+                domainReportPaginationContainer.appendChild(prevButton);
+
+                // Page Info Span
+                const pageInfo = document.createElement('span');
+                pageInfo.className = 'px-4 py-2 text-gray-300';
+                pageInfo.textContent = `Page ${currentDomainPage} of ${totalPages}`;
+                domainReportPaginationContainer.appendChild(pageInfo);
+
+                // Next Button
+                const nextButton = document.createElement('button');
+                nextButton.textContent = 'Next';
+                nextButton.className = 'pagination-btn cursor-pointer font-bold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed';
+                if (currentDomainPage === totalPages) {
+                    nextButton.disabled = true;
+                }
+                nextButton.onclick = () => renderDomainReport(currentDomainPage + 1);
+                domainReportPaginationContainer.appendChild(nextButton);
             }
 
             // --- Bubble Chart Logic ---
